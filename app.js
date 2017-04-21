@@ -5,6 +5,7 @@ var path = require('path');
 var fs = require('fs');
 var ejsLayouts = require("express-ejs-layouts");
 var bodyParser = require('body-parser');
+var db = require('./models');
 
 var app = express();
 
@@ -23,101 +24,105 @@ app.get('/', function(req, res) {
     res.redirect('/games');
 });
 
+// our games listed out
 app.get('/games', function(req, res) {
-    var games = getGames();
+    db.game.findAll().then(function(games) {
+        res.render('games-index', { games: games });
+    }).catch(function(error) {
+        res.status(404).send(error);
+    });
 
-    res.render('games-index', { games: games });
+
 });
 
+// form page to add for new games
 app.get('/games/new', function(req, res) {
     res.render('games-new');
 });
 
+// action for adding new game
 app.post('/games', function(req, res) {
-    console.log(req.body);
+
+
     var newGame = req.body;
 
-    var games = getGames();
-    games.push(newGame);
-    saveGames(games);
+    db.game.create({
+        name: newGame.name,
+        description: newGame.description
+    }).then(function() {
+        res.redirect('/games');
+    });
 
-    res.redirect('/games');
 });
 
-// show page
+// show page for each game
 app.get('/game/:name', function(req, res) {
-    var nameOfTheGame = req.params.name;
-    var games = getGames();
-    var game = getGame(games, nameOfTheGame);
 
-    res.render('games-show', game);
-});
+    var gameName = req.params.name;
 
-app.get('/game/:name/edit', function(req, res) {
-    var nameOfTheGame = req.params.name;
-    var games = getGames();
-    var game = getGame(games, nameOfTheGame);
-
-    res.render('games-edit', game);
-});
-
-app.put('/game/:name', function(req, res) {
-    var theNewGameData = req.body;
-
-    var nameOfTheGame = req.params.name;
-    var games = getGames();
-    var game = getGame(games, nameOfTheGame);
-
-    game.name = theNewGameData.name;
-    game.description = theNewGameData.description;
-
-    saveGames(games);
-
-    res.send(req.body);
-});
-
-app.delete('/game/:name', function(req, res) {
-    var nameOfTheGame = req.params.name;
-    var games = getGames();
-    var game = getGame(games, nameOfTheGame);
-    var indexOfGameToDelete = games.indexOf(game);
-
-    games.splice(indexOfGameToDelete, 1);
-
-    saveGames(games);
-
-    res.send(game);
-});
-
-// helper functions
-
-function getGame(games, nameOfTheGame) {
-    var game = null;
-
-    for (var i = 0; i < games.length; i++) {
-        if (games[i].name.toLowerCase() == nameOfTheGame.toLowerCase()) {
-            game = games[i];
-            break;
+    db.game.find({
+        where: {
+            name: gameName
         }
-    }
+    }).then(function(foundGame) {
+        res.render('games-show', foundGame.dataValues);
+    });
+});
 
-    return game;
-}
+//form to edit games
+app.get('/game/:name/edit', function(req, res) {
 
-// Read list of games from file.
-function getGames() {
-    var fileContents = fs.readFileSync('./games.json'); // :'(
-    var games = JSON.parse(fileContents);
-    return games;
-}
+    var gameName = req.params.name;
 
-// Write list of games to file.
-function saveGames(games) {
-    fs.writeFileSync('./games.json', JSON.stringify(games));
-}
+    db.game.find({
+        where: {
+            name: gameName
+        }
+    }).then(function(foundGame) {
+        res.render('games-edit', foundGame.dataValues);
+    });
+});
+
+// handle edit aftter submit on edit page
+app.put('/game/:name', function(req, res) {
+    var newGameData = req.body;
+
+    var gameName = req.params.name;
+
+    db.game.update({
+        name: newGameData.name,
+        description: newGameData.description,
+        number_of_players: newGameData.number_of_players
+    }, {
+        where: {
+            name: gameName
+        }
+    }).then(function() {
+        res.send(req.body);
+    });
+
+});
+
+// handle deletions
+app.delete('/game/:name', function(req, res) {
+    var gameName = req.params.name;
+
+    db.game.destroy({
+        where: {
+            name: gameName
+        }
+    }).then(function() {
+        res.redirect("/game");
+        // why wont the page reload
+    });
+
+});
+
+
+
 
 // start the server
 
 var port = 3000;
-console.log("http://localhost:" + port);
+
 app.listen(port);
